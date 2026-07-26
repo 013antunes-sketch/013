@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BotCloud - Painel</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>body { background-color: #0b0e14; }</style>
+</head>
+<body class="text-gray-200 font-sans min-h-screen flex flex-col">
+
+    <nav class="bg-[#151922] border-b border-gray-800 px-6 py-4 flex justify-between items-center">
+        <h1 class="text-xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-emerald-500 tracking-wider">
+            BOT<span class="text-white">CLOUD</span>
+        </h1>
+        <div class="flex items-center gap-4">
+            <span id="accountType" class="px-3 py-1 bg-yellow-600/20 text-yellow-400 rounded-full text-xs font-bold border border-yellow-600/30">DEMO</span>
+            <span id="balanceDisplay" class="font-mono text-emerald-400 font-bold">$0.00</span>
+        </div>
+    </nav>
+
+    <main class="flex-1 p-6 grid grid-cols-1 lg:grid-cols-3 gap-6 max-w-7xl mx-auto w-full">
+        <div class="lg:col-span-1 space-y-6">
+            <div class="bg-[#151922] p-5 rounded-xl border border-gray-800 space-y-4">
+                <h3 class="text-sm font-bold uppercase tracking-wider text-gray-400">Gerenciamento</h3>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs text-gray-400 mb-1">Entrada ($)</label>
+                        <input type="number" id="inputValue" value="10" class="w-full p-2 bg-[#1e2530] border border-gray-700 rounded text-white focus:outline-none focus:border-green-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs text-gray-400 mb-1">Martingale</label>
+                        <input type="number" id="galeLevel" value="1" class="w-full p-2 bg-[#1e2530] border border-gray-700 rounded text-white focus:outline-none focus:border-green-500">
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-[#151922] p-5 rounded-xl border border-gray-800 flex flex-col h-64">
+                <h3 class="text-sm font-bold uppercase tracking-wider text-gray-400 mb-2">Lista de Sinais</h3>
+                <textarea id="signalsList" class="flex-1 p-3 bg-[#1e2530] border border-gray-700 rounded text-sm font-mono text-emerald-400 focus:outline-none focus:border-green-500 resize-none" placeholder="M5;EURUSD;22:45;CALL"></textarea>
+                <button id="btnStartBot" class="mt-4 w-full py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white font-bold rounded shadow-lg transition-all">
+                    INICIAR OPERAÇÕES
+                </button>
+            </div>
+        </div>
+
+        <div class="lg:col-span-2 space-y-6 flex flex-col">
+            <div class="grid grid-cols-3 gap-4">
+                <div class="bg-[#151922] p-4 rounded-xl border border-gray-800">
+                    <p class="text-xs text-gray-400 uppercase font-semibold">Resultado</p>
+                    <p id="todayResult" class="text-2xl font-mono font-bold mt-1 text-gray-300">$0.00</p>
+                </div>
+                <div class="bg-[#151922] p-4 rounded-xl border border-gray-800">
+                    <p class="text-xs text-gray-400 uppercase font-semibold">Placar</p>
+                    <p id="scoreDisplay" class="text-2xl font-mono font-bold mt-1 text-gray-300"><span class="text-green-400">0</span>x<span class="text-red-400">0</span></p>
+                </div>
+            </div>
+
+            <div class="bg-[#151922] p-5 rounded-xl border border-gray-800 flex-1 flex flex-col min-h-[300px]">
+                <h3 class="text-sm font-bold uppercase tracking-wider text-gray-400 mb-3">Logs em Tempo Real</h3>
+                <div id="consoleLogs" class="flex-1 bg-[#0b0e14] border border-gray-800 rounded p-4 font-mono text-xs text-gray-400 overflow-y-auto space-y-1">
+                    <p class="text-gray-600">[Sistema] Aguardando inicialização do bot...</p>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        let ws;
+        const btnStart = document.getElementById('btnStartBot');
+        const consoleLogs = document.getElementById('consoleLogs');
+
+        function log(message, type = 'system') {
+            const colors = { system: 'text-gray-500', success: 'text-green-400', error: 'text-red-400', info: 'text-blue-400' };
+            const p = document.createElement('p');
+            p.className = colors[type];
+            p.innerText = `[${new Date().toLocaleTimeString()}] ${message}`;
+            consoleLogs.appendChild(p);
+            consoleLogs.scrollTop = consoleLogs.scrollHeight;
+        }
+
+        btnStart.addEventListener('click', () => {
+            if (btnStart.innerText === "INICIAR OPERAÇÕES") {
+                ws = new WebSocket("ws://127.0.0.1:8000/ws/bot");
+                
+                ws.onopen = () => {
+                    log("Conectado à nuvem virtual!", "success");
+                    btnStart.innerText = "PARAR ROBÔ";
+                    btnStart.className = "mt-4 w-full py-3 bg-red-600 text-white font-bold rounded shadow-lg transition-all";
+                    
+                    ws.send(JSON.stringify({
+                        entrada: parseFloat(document.getElementById('inputValue').value),
+                        gales: parseInt(document.getElementById('galeLevel').value),
+                        sinais: document.getElementById('signalsList').value
+                    }));
+                };
+
+                ws.onmessage = (event) => {
+                    const data = JSON.parse(event.data);
+                    if (data.type === 'log') log(data.message, data.log_type);
+                    if (data.type === 'update') {
+                        document.getElementById('todayResult').innerText = `$${data.lucro.toFixed(2)}`;
+                        document.getElementById('todayResult').className = `text-2xl font-mono font-bold mt-1 ${data.lucro >= 0 ? 'text-green-400' : 'text-red-400'}`;
+                        document.getElementById('scoreDisplay').innerHTML = `<span class="text-green-400">${data.wins}</span>x<span class="text-red-400">${data.losses}</span>`;
+                    }
+                };
+
+                ws.onclose = () => {
+                    log("Operações encerradas.", "error");
+                    btnStart.innerText = "INICIAR OPERAÇÕES";
+                    btnStart.className = "mt-4 w-full py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white font-bold rounded shadow-lg transition-all";
+                };
+            } else {
+                ws.close();
+            }
+        });
+
+        document.getElementById('balanceDisplay').innerText = `$${localStorage.getItem('saldo') || '0.00'}`;
+        document.getElementById('accountType').innerText = localStorage.getItem('ambiente') || 'DEMO';
+    </script>
+</body>
+</html>
